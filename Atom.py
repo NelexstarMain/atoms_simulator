@@ -1,7 +1,10 @@
 import pygame
+import pygame.gfxdraw 
+
 import math
 import random
 import numpy as np
+from Slider import Slider
 
 class Atom:
     def __init__(self,
@@ -19,13 +22,18 @@ class Atom:
         self.energy: int = energy
         self.vector: pygame.Vector2 = vector
         self.color: tuple[int, int, int] = (255, 0, 0)
+        self.colided_with: list = []
         
-    def move(self) -> None:
+    def move(self, gravity_value) -> None:
         if self.vector.length() > 0:
             self.vector = self.vector.normalize()
             min_speed = 1
             max_speed = 5
             speed = min_speed + (max_speed - min_speed) * (self.energy / 100)
+            
+            # Dodanie grawitacji zależnej od energii
+            gravity = gravity_value * (1 - self.energy/100)  # Im mniejsza energia, tym większa grawitacja
+            self.vector.y += gravity
             
             # Apply the speed to the normalized vector
             self.x += self.vector.x * speed
@@ -47,20 +55,55 @@ class Atom:
         blue = int(255 * (1 - t))
         
         self.color = (red, 0, blue)
-        self.move()
+
         
     def collider_with_wall(self, energy) -> None:
-        if self.x < self.radius or self.x > 800 - self.radius:
+        # Lewa ściana
+        if self.x < self.radius:
+            self.x = self.radius  # Wymuszamy prawidłową pozycję
             self.vector.x *= -1
             self.energy = np.mean([self.energy, energy])
-        if self.y < self.radius or self.y > 600 - self.radius:
+        
+        # Prawa ściana    
+        elif self.x > 800 - self.radius:
+            self.x = 800 - self.radius  # Wymuszamy prawidłową pozycję
+            self.vector.x *= -1
+            self.energy = np.mean([self.energy, energy])
+        
+        # Górna ściana
+        if self.y < self.radius:
+            self.y = self.radius  # Wymuszamy prawidłową pozycję
+            self.vector.y *= -1
+            self.energy = np.mean([self.energy, energy])
+        
+        # Dolna ściana
+        elif self.y > 600 - self.radius:
+            self.y = 600 - self.radius  # Wymuszamy prawidłową pozycję
             self.vector.y *= -1
             self.energy = np.mean([self.energy, energy])
     
-    def draw(self, screen) -> None:
-        pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.radius)
+    def draw_rect(self, screen) -> None:
+        # Rysowanie głównego koła z wypełnieniem
+        pygame.gfxdraw.filled_circle(screen, 
+                                    int(self.x), 
+                                    int(self.y), 
+                                    self.radius, 
+                                    (0, 0, 0))
+        
+        # Dodanie wygładzonej krawędzi
+        pygame.gfxdraw.aacircle(screen, 
+                            int(self.x), 
+                            int(self.y), 
+                            self.radius, 
+                            self.color)
+
+        
+    def draw_line(self, screen) -> None:
+        for other in self.colided_with:
+            pygame.draw.line(screen, (255, 255, 255), (self.x, self.y), (other.x, other.y), 1)
         
     def handle_collision(self, others: list):
+        self.colided_with = []
         for other in others:
             dx = other.x - self.x
             dy = other.y - self.y
@@ -77,36 +120,71 @@ class Atom:
                 # Odsunięcie cząsteczek
                 self.x -= nx * overlap/2
                 self.y -= ny * overlap/2
+                
                 other.x += nx * overlap/2
                 other.y += ny * overlap/2
                 
+                # Clamp velocity components to prevent overflow
+                MAX_VELOCITY = 1000  # Adjust this value as needed
+                vx_diff = min(max(other.vector.x - self.vector.x, -MAX_VELOCITY), MAX_VELOCITY)
+                vy_diff = min(max(other.vector.y - self.vector.y, -MAX_VELOCITY), MAX_VELOCITY)
+                
+                relative_velocity = math.sqrt(vx_diff**2 + vy_diff**2)
+                impulse = (2 * relative_velocity) / (self.mass + other.mass)
+                
+                # Clamp impulse to prevent excessive forces
+                MAX_IMPULSE = 100  # Adjust this value as needed
+                impulse = min(impulse, MAX_IMPULSE)
+                
+                other.vector.x += (nx * impulse * self.mass)
+                other.vector.y += (ny * impulse * self.mass)
+                self.vector.x -= (nx * impulse * other.mass)
+                self.vector.y -= (ny * impulse * other.mass)
+                
                 self.energy = np.mean([self.energy, other.energy])
-
-
-            
+                
+            elif distance < self.radius * 4:
+                self.colided_with.append(other)
             
         
 pygame.init()
 screen = pygame.display.set_mode((800, 600))
 clock = pygame.time.Clock()
 
-atoms = [Atom(random.randint(0, 800), random.randint(0, 600), 1, 1, pygame.Vector2(random.randint(-3, 3), random.randint(-3, 3))) for _ in range(200)]
+atoms = [Atom(random.randint(0, 800), random.randint(0, 600), 1, 1, pygame.Vector2(random.randint(1, 3), random.randint(1, 3))) for _ in range(200)]
+sliders = [
+    Slider(200, 50, 1, 100, 20, "temp", (40, 20, 80)),
+    Slider(200, 50, 0, 1, 0.2, "gravity", (40, 20, 80)),
+]
 
+for slider in sliders:
+        slider.set(sliders, 10, 5)
+        
 running = True
 while running:
     screen.fill((0, 0, 0))
     for atom in atoms:
         atom.update()
-        atom.collider_with_wall(100)
+        atom.move(sliders[1].value)
+        atom.collider_with_wall(sliders[0].value)
         atom.handle_collision(atoms)
         
-        atom.draw(screen)
+        atom.draw_line(screen)
         
+    for atom in atoms:
+        atom.draw_rect(screen)
+
+  
+    for slider in sliders:
+        slider.draw(screen)
+        slider
     pygame.display.flip()
     clock.tick(60)
     
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        for slider in sliders:
+            slider.handle_event(event)
 
 pygame.quit()

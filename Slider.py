@@ -44,9 +44,19 @@ class Slider:
         self.active = False
 
     def set(self, sliders: list, x_offset: int, y_offset: int) -> None:
+        """
+        Ustawia pozycję slidera na ekranie.
+        
+        Args:
+            sliders (list): Lista wszystkich sliderów
+            x_offset (int): Odstęp od lewej krawędzi ekranu
+            y_offset (int): Początkowy odstęp od góry ekranu
+        """
         number_in_list = sliders.index(self)
         self.x = x_offset
-        self.y = y_offset + (self.height + 40) * number_in_list
+        # Dodajemy stały margines między sliderami
+        margin = 10
+        self.y = y_offset + (self.height + margin) * number_in_list
 
     def handle_event(self, event):
         # Dostosuj pozycję myszy względem panelu kontrolnego
@@ -69,23 +79,22 @@ class Slider:
     def draw(self, screen) -> None:
         # Rysowanie tła suwaka
         rect_1 = pygame.Rect(self.x, self.y, self.width, self.height)
-        rect_2 = pygame.Rect(self.x, self.y, self.width, self.height * 0.4)
+        rect_2 = pygame.Rect(self.x, self.y, self.width, self.height * 0.2)
         
         rect_2.center = rect_1.center
-        
         pygame.draw.rect(screen, self.color, rect_2, 3)
         
         # Rysowanie tekstu
         font = pf.SysFont('Arial', 15, bold=True)
         font_1 = pf.SysFont('Arial', 13, bold=True)
         
-        text_surface = font.render(f"{self.value:.1f}", True, (0, 0, 0))
+        text_surface = font.render(f"{self.value:.1f}", True, self.color)
         text_rect = text_surface.get_rect(center=(rect_1.centerx, rect_1.centery + 15))
         
         if self.active:
         
-            title = font_1.render(f"{self.text}", False, (0, 0, 0))
-            title_rect = title.get_rect(left=self.x, top=self.y - 10)
+            title = font_1.render(f"{self.text.upper()}", False, self.color)
+            title_rect = title.get_rect(left=self.x, top=self.y)
             screen.blit(title, title_rect)
         
         screen.blit(text_surface, text_rect)
@@ -93,5 +102,5 @@ class Slider:
         
         # Rysowanie kółka suwaka
         slider_x = self.x + (self.value - self.min_val) / (self.max_val - self.min_val) * self.width
-        pygame.draw.circle(screen, (0, 0, 0), (int(slider_x), self.y + self.height // 2), 8, 2)
+        pygame.draw.circle(screen, self.color, (int(slider_x), self.y + self.height // 2), 8, 3)
 
