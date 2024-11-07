@@ -1,5 +1,6 @@
 import pygame
 import pygame.gfxdraw 
+import  pygame.font as pf
 
 import math
 import random
@@ -100,7 +101,37 @@ class Atom:
         
     def draw_line(self, screen) -> None:
         for other in self.colided_with:
-            pygame.draw.line(screen, (255, 255, 255), (self.x, self.y), (other.x, other.y), 1)
+            # Obliczamy punkty dla linii
+            start_pos = (self.x, self.y)
+            end_pos = (other.x, other.y)
+            
+            # Obliczamy długość linii
+            length = math.sqrt((end_pos[0] - start_pos[0])**2 + (end_pos[1] - start_pos[1])**2)
+            
+            # Liczba segmentów gradientu (możesz dostosować)
+            segments = 20
+            
+            for i in range(segments):
+                # Obliczamy pozycje początku i końca segmentu
+                start_segment = (
+                    start_pos[0] + (end_pos[0] - start_pos[0]) * i / segments,
+                    start_pos[1] + (end_pos[1] - start_pos[1]) * i / segments
+                )
+                end_segment = (
+                    start_pos[0] + (end_pos[0] - start_pos[0]) * (i + 1) / segments,
+                    start_pos[1] + (end_pos[1] - start_pos[1]) * (i + 1) / segments
+                )
+                
+                # Interpolacja kolorów
+                t = i / segments
+                color = (
+                    int(self.color[0] + (other.color[0] - self.color[0]) * t),
+                    int(self.color[1] + (other.color[1] - self.color[1]) * t),
+                    int(self.color[2] + (other.color[2] - self.color[2]) * t)
+                )
+                
+                # Rysowanie segmentu
+                pygame.draw.line(screen, color, start_segment, end_segment, 2)
         
     def handle_collision(self, others: list):
         self.colided_with = []
@@ -143,8 +174,21 @@ class Atom:
                 
                 self.energy = np.mean([self.energy, other.energy])
                 
-            elif distance < self.radius * 4:
-                self.colided_with.append(other)
+            elif self.radius <= 10:
+                if distance < self.radius * 4:
+                    self.colided_with.append(other)
+            elif self.radius > 10:
+                if distance < self.radius * 3:
+                    self.colided_with.append(other)
+    
+def calculate_average_energy(atoms: list) -> float:
+    # Zbieramy energie wszystkich atomów do listy
+    energies = [atom.energy for atom in atoms]
+    
+    # Używamy numpy do obliczenia średniej
+    average_energy = np.mean(energies)
+    return average_energy
+
             
         
 pygame.init()
@@ -155,16 +199,27 @@ atoms = [Atom(random.randint(0, 800), random.randint(0, 600), 1, 1, pygame.Vecto
 sliders = [
     Slider(200, 50, 1, 100, 20, "temp", (40, 20, 80)),
     Slider(200, 50, 0, 1, 0.2, "gravity", (40, 20, 80)),
-]
-
+    Slider(200, 50, 5, 15, 10, "size", (40, 20, 80))
+]   
+font = pygame.font.SysFont('Arial', 20)
 for slider in sliders:
         slider.set(sliders, 10, 5)
         
 running = True
 while running:
+    average_energy = calculate_average_energy(atoms)
+
+    # print average energy on screen
+    
     screen.fill((0, 0, 0))
+    text_surface = font.render(f"{average_energy:.2f}", True, (255, 255, 255))
+    screen.blit(text_surface, (700, 10))
+    
+
     for atom in atoms:
         atom.update()
+        atom.radius = math.floor(sliders[2].value)
+        
         atom.move(sliders[1].value)
         atom.collider_with_wall(sliders[0].value)
         atom.handle_collision(atoms)
@@ -186,5 +241,4 @@ while running:
             running = False
         for slider in sliders:
             slider.handle_event(event)
-
 pygame.quit()
